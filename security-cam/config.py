@@ -55,3 +55,11 @@ ARMED_END_HOUR = 6     # 6am
 # roughly 1 second of continuous presence. Raise it if still getting
 # false positives, lower it if real presence feels slow to register.
 CONSECUTIVE_FRAMES_THRESHOLD = 15
+
+# Minimum gap between anomaly alerts, even if presence keeps re-triggering.
+# Without this, someone standing in frame gets logged as a "new" anomaly
+# every time YOLO drops them for a frame and picks them back up a few
+# seconds later — saw this happen 4 times in 11 seconds during testing.
+# This doesn't affect detection itself, just how often we're willing to
+# actually alert about it.
+ANOMALY_COOLDOWN_SECONDS = 30

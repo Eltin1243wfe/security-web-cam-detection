@@ -25,8 +25,7 @@ import cv2
 import config
 from src.camera import PhoneCamera
 from src.detector import Detector
-from src.rules import PresenceTracker, is_armed
-
+from src.rules import PresenceTracker, CooldownGate, is_armed
 
 def draw_detections(frame, detections):
     for det in detections:
@@ -56,7 +55,9 @@ def main():
         confidence_threshold=config.CONFIDENCE_THRESHOLD,
         classes_of_interest=config.CLASSES_OF_INTEREST,
     )
-    presence_tracker = PresenceTracker(config.CONSECUTIVE_FRAMES_THRESHOLD)
+    presence_tracker = PresenceTracker(config.CONSECUTIVE_FRAMES_THRESHOLD), 
+    cooldown_gate = CooldownGate(config.ANOMALY_COOLDOWN_SECONDS)
+
 
     with PhoneCamera(config.CAMERA_SOURCE) as cam:
         while True:
@@ -79,12 +80,13 @@ def main():
             event_started = presence_tracker.update(person_detected)
             armed = is_armed()
 
-            if event_started:
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                if armed:
+            if event_started and armed:
+                if cooldown_gate.should_fire():
+                    timestamp = datetime.now().strftime("%H:%M:%S")
                     print(f"[{timestamp}] ANOMALY: sustained person detected while armed")
-                else:
-                    print(f"[{timestamp}] person detected (system disarmed, no anomaly)")
+            elif event_started:
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                print(f"[{timestamp}] person detected (system disarmed, no anomaly)")
 
             frame = draw_detections(frame, detections)
             frame = draw_status(frame, armed)
