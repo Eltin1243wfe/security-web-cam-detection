@@ -55,7 +55,7 @@ def main():
         confidence_threshold=config.CONFIDENCE_THRESHOLD,
         classes_of_interest=config.CLASSES_OF_INTEREST,
     )
-    presence_tracker = PresenceTracker(config.CONSECUTIVE_FRAMES_THRESHOLD), 
+    presence_tracker = PresenceTracker(config.CONSECUTIVE_FRAMES_THRESHOLD) 
     cooldown_gate = CooldownGate(config.ANOMALY_COOLDOWN_SECONDS)
 
 
