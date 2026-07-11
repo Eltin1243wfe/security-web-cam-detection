@@ -63,3 +63,9 @@ CONSECUTIVE_FRAMES_THRESHOLD = 15
 # This doesn't affect detection itself, just how often we're willing to
 # actually alert about it.
 ANOMALY_COOLDOWN_SECONDS = 30
+
+# --- Stage 4: alerting ---------------------------------------------------
+
+# Path to the sound played when an anomaly actually fires (i.e. survives
+# the consecutive-frame filter, is armed, and clears the cooldown).
+ALERT_SOUND_PATH = "assets/alert.wav"

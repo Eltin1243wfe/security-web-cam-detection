@@ -26,6 +26,7 @@ import config
 from src.camera import PhoneCamera
 from src.detector import Detector
 from src.rules import PresenceTracker, CooldownGate, is_armed
+from src.alerts import play_alert
 
 def draw_detections(frame, detections):
     for det in detections:
@@ -84,6 +85,7 @@ def main():
                 if cooldown_gate.should_fire():
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     print(f"[{timestamp}] ANOMALY: sustained person detected while armed")
+                    play_alert()
             elif event_started:
                 timestamp = datetime.now().strftime("%H:%M:%S")
                 print(f"[{timestamp}] person detected (system disarmed, no anomaly)")
