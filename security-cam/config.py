@@ -42,7 +42,7 @@ SYSTEM_ARMED = True
 # If True, SYSTEM_ARMED alone isn't enough to arm — detections only count
 # as anomalies during the hours below too. If False, SYSTEM_ARMED is the
 # only gate and the system is armed any time it's on.
-USE_TIME_WINDOW = True
+USE_TIME_WINDOW = False
 
 # Window is [start, end) in 24h format. Handles wrapping past midnight
 # fine (e.g. 22 -> 6) — see is_armed() in src/rules.py for the logic.
