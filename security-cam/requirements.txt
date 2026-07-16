@@ -1,2 +1,3 @@
 opencv-python>=4.9
 ultralytics>=8.2
+python-dotenv>=1.0

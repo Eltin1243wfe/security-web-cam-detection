@@ -6,6 +6,11 @@ no parsing, no schema, just import and go. If this grows past ~30 lines
 or I need per-environment configs, I'll switch to YAML then.
 """
 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()  # reads .env into the environment — that's where the Telegram secrets live, not in this file
+
 # Iriun Webcam exposes the phone as a normal Linux video device once
 # the app is open on the phone and the desktop client is connected —
 # no URL needed, just the device index.
@@ -69,3 +74,12 @@ ANOMALY_COOLDOWN_SECONDS = 30
 # Path to the sound played when an anomaly actually fires (i.e. survives
 # the consecutive-frame filter, is armed, and clears the cooldown).
 ALERT_SOUND_PATH = "assets/alert.wav"
+
+# Telegram bot for push alerts. Get these by messaging @BotFather to
+# create a bot (gives you the token), then messaging your new bot once
+# and hitting https://api.telegram.org/bot<token>/getUpdates to read
+# your chat id back out of the response.
+# Pulled from .env (gitignored) rather than hardcoded here — this file
+# gets committed to git, .env doesn't, so the token stays off GitHub.
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
