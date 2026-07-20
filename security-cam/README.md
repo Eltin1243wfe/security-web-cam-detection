@@ -8,8 +8,8 @@ off-hours, an object left behind, motion that looks like a fall — and alerts m
 
 - [x] Phone camera feed into Python
 - [x] YOLO detection running live, boxes drawn on screen
-- [ ] Anomaly/event rules layer
-- [ ] Alerting (sound, then Telegram/Pushover)
+- [x] Anomaly/event rules layer
+- [x] Alerting (sound, then Telegram/Pushover)
 - [ ] False-positive hardening
 - [ ] One-command run + local web dashboard
 - [ ] Productize for a real buyer
