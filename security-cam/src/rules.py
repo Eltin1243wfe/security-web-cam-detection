@@ -23,8 +23,6 @@ guessed upfront:
 from datetime import datetime
 import math
 
-import config
-
 
 def _box_center(box):
     x1, y1, x2, y2 = box
@@ -140,22 +138,27 @@ class CooldownGate:
         return True
 
 
-def is_armed(now: datetime | None = None) -> bool:
+def is_armed(state, now: datetime | None = None) -> bool:
     """
     Whether the system should currently treat sustained presence as an
-    anomaly worth alerting on. SYSTEM_ARMED is the manual override — if
-    that's off, nothing else matters. If it's on and USE_TIME_WINDOW is
-    set, arming is further restricted to ARMED_START_HOUR-ARMED_END_HOUR
+    anomaly worth alerting on. Reads from the live SharedState rather
+    than static config — as of stage 6, armed status and the schedule
+    are toggleable from the dashboard at runtime, so config.py only
+    supplies the *initial* values state gets seeded with at startup.
+
+    state.is_armed_override_enabled() is the manual override — if
+    that's off, nothing else matters. If it's on and the schedule is
+    enabled, arming is further restricted to the configured hour window
     (e.g. midnight-6am, when nobody should reasonably be up).
     """
-    if not config.SYSTEM_ARMED:
+    if not state.is_armed_override_enabled():
         return False
 
-    if not config.USE_TIME_WINDOW:
+    use_time_window, start, end = state.get_schedule()
+    if not use_time_window:
         return True
 
     now = now or datetime.now()
-    start, end = config.ARMED_START_HOUR, config.ARMED_END_HOUR
 
     if start < end:
         return start <= now.hour < end

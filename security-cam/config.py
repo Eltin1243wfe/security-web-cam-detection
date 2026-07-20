@@ -83,6 +83,20 @@ MIN_PERSON_BOX_HEIGHT = 40
 # 1/15th of a second, but this still allows normal walking-speed motion.
 MAX_CENTER_DRIFT_PX = 150
 
+# --- Stage 6: dashboard --------------------------------------------------
+
+# localhost only on purpose — there's no login on this dashboard, so it
+# shouldn't be reachable from the rest of the WiFi network by default.
+# Change to "0.0.0.0" later if I want it visible from my phone's
+# browser too, but that's a deliberate choice to make, not a default.
+DASHBOARD_HOST = "127.0.0.1"
+DASHBOARD_PORT = 5000
+
+# Where snapshot photos for the alert log get saved. Gitignored — these
+# are personal footage, not something that belongs in version control.
+SNAPSHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshots")
+
+
 # --- Stage 4: alerting ---------------------------------------------------
 
 # Path to the sound played when an anomaly actually fires (i.e. survives

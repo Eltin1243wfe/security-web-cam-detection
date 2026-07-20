@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Security Feed</title>
+<style>
+    /* Plain CSS, no framework — this is one page, not worth the dependency. */
+    body {
+        background: #111;
+        color: #eee;
+        font-family: -apple-system, sans-serif;
+        margin: 0;
+        padding: 20px;
+    }
+    .layout {
+        display: flex;
+        gap: 20px;
+        max-width: 1100px;
+        margin: 0 auto;
+        flex-wrap: wrap;
+    }
+    .feed-panel {
+        flex: 2;
+        min-width: 400px;
+    }
+    .side-panel {
+        flex: 1;
+        min-width: 280px;
+    }
+    img#feed {
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #333;
+        display: block;
+    }
+    .card {
+        background: #1b1b1b;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    h2 {
+        margin: 0 0 12px 0;
+        font-size: 15px;
+        color: #999;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    .status-armed { background: #4a1414; color: #ff6b6b; }
+    .status-disarmed { background: #333; color: #aaa; }
+    button {
+        background: #2a2a2a;
+        color: #eee;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 10px 16px;
+        font-size: 14px;
+        cursor: pointer;
+        width: 100%;
+        margin-top: 10px;
+    }
+    button:hover { background: #333; }
+    button.ok-button {
+        background: #14331a;
+        border-color: #2a5a35;
+        color: #6bdc82;
+    }
+    button.ok-button:hover { background: #1a4322; }
+    label { font-size: 13px; color: #bbb; display: block; margin-top: 10px; }
+    input[type="number"] {
+        width: 60px;
+        background: #111;
+        border: 1px solid #444;
+        color: #eee;
+        border-radius: 4px;
+        padding: 4px;
+    }
+    .alert-entry {
+        display: flex;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid #2a2a2a;
+        align-items: center;
+    }
+    .alert-entry img {
+        width: 70px;
+        height: 52px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid #333;
+    }
+    .alert-entry .time {
+        font-size: 13px;
+        color: #ccc;
+    }
+    .acknowledged-note {
+        color: #6bb8ff;
+        font-size: 13px;
+        margin-top: 8px;
+    }
+</style>
+</head>
+<body>
+
+<div class="layout">
+    <div class="feed-panel">
+        <img id="feed" src="/video_feed" alt="Live feed">
+    </div>
+
+    <div class="side-panel">
+        <div class="card">
+            <h2>Status</h2>
+            <span id="armed-badge" class="status-badge status-disarmed">DISARMED</span>
+            <button id="toggle-armed-btn">Toggle Armed</button>
+            <button id="ok-btn" class="ok-button">It's OK — this is expected</button>
+            <div id="ack-note" class="acknowledged-note" style="display:none;">
+                Acknowledged — alerts paused until this person leaves frame.
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Night Schedule</h2>
+            <label>
+                <input type="checkbox" id="use-schedule"> Auto-arm during these hours
+            </label>
+            <label>
+                Start hour: <input type="number" id="start-hour" min="0" max="23">
+                End hour: <input type="number" id="end-hour" min="0" max="23">
+            </label>
+            <button id="save-schedule-btn">Save Schedule</button>
+        </div>
+
+        <div class="card">
+            <h2>Recent Alerts</h2>
+            <div id="alert-log">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Simple polling instead of websockets — status changes a few times a
+// minute at most, a 2s poll is plenty responsive for this and far
+// simpler than standing up a socket connection for one small page.
+async function refreshStatus() {
+    const res = await fetch('/status');
+    const data = await res.json();
+
+    const badge = document.getElementById('armed-badge');
+    badge.textContent = data.armed_override ? 'ARMED' : 'DISARMED';
+    badge.className = 'status-badge ' + (data.armed_override ? 'status-armed' : 'status-disarmed');
+
+    document.getElementById('use-schedule').checked = data.use_time_window;
+    document.getElementById('start-hour').value = data.armed_start_hour;
+    document.getElementById('end-hour').value = data.armed_end_hour;
+
+    document.getElementById('ack-note').style.display = data.acknowledged ? 'block' : 'none';
+
+    const logDiv = document.getElementById('alert-log');
+    if (data.alert_log.length === 0) {
+        logDiv.innerHTML = '<div style="color:#666;">No alerts yet.</div>';
+    } else {
+        logDiv.innerHTML = data.alert_log.map(entry => `
+            <div class="alert-entry">
+                <img src="/snapshots/${entry.snapshot_filename}" alt="snapshot">
+                <div class="time">${entry.timestamp}</div>
+            </div>
+        `).join('');
+    }
+}
+
+document.getElementById('toggle-armed-btn').addEventListener('click', async () => {
+    await fetch('/toggle_armed', { method: 'POST' });
+    refreshStatus();
+});
+
+document.getElementById('ok-btn').addEventListener('click', async () => {
+    await fetch('/acknowledge', { method: 'POST' });
+    refreshStatus();
+});
+
+document.getElementById('save-schedule-btn').addEventListener('click', async () => {
+    const payload = {
+        use_time_window: document.getElementById('use-schedule').checked,
+        armed_start_hour: parseInt(document.getElementById('start-hour').value, 10),
+        armed_end_hour: parseInt(document.getElementById('end-hour').value, 10),
+    };
+    await fetch('/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    refreshStatus();
+});
+
+refreshStatus();
+setInterval(refreshStatus, 2000);
+</script>
+
+</body>
+</html>
