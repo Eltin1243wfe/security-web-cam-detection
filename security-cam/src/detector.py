@@ -9,10 +9,21 @@ from ultralytics import YOLO
 
 
 class Detector:
-    def __init__(self, model_name: str, confidence_threshold: float, classes_of_interest: list[str]):
+    def __init__(
+        self,
+        model_name: str,
+        confidence_threshold: float,
+        classes_of_interest: list[str],
+        min_box_height: int = 0,
+    ):
         self.model = YOLO(model_name)
         self.confidence_threshold = confidence_threshold
         self.classes_of_interest = set(classes_of_interest)
+        # Tiny boxes are almost always noise — a reflection, a distant
+        # poster, a sliver of something that vaguely resembles the target
+        # class. A real person standing anywhere useful in frame is going
+        # to be taller than this. 0 disables the filter entirely.
+        self.min_box_height = min_box_height
 
     def detect(self, frame):
         """
@@ -35,6 +46,10 @@ class Detector:
                 continue
 
             x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+            if (y2 - y1) < self.min_box_height:
+                continue
+
             detections.append({
                 "label": label,
                 "confidence": confidence,

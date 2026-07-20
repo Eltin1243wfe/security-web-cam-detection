@@ -19,6 +19,7 @@ every time someone walks into frame.
 import shutil
 import subprocess
 import threading
+import time
 
 import cv2
 import requests
@@ -58,17 +59,32 @@ def _send_telegram_photo(frame, caption: str):
         return
 
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto"
-    try:
-        response = requests.post(
-            url,
-            data={"chat_id": config.TELEGRAM_CHAT_ID, "caption": caption},
-            files={"photo": ("snapshot.jpg", buffer.tobytes(), "image/jpeg")},
-            timeout=10,
-        )
-        if not response.ok:
+    photo_bytes = buffer.tobytes()
+
+    # One retry on top of the initial attempt — a flaky connection
+    # (mobile hotspot, in particular) can drop mid-upload on the first
+    # try and succeed cleanly a second later. Not worth retrying
+    # forever; if it fails twice, something more than transient
+    # flakiness is probably going on.
+    attempts = 2
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.post(
+                url,
+                data={"chat_id": config.TELEGRAM_CHAT_ID, "caption": caption},
+                files={"photo": ("snapshot.jpg", photo_bytes, "image/jpeg")},
+                timeout=10,
+            )
+            if response.ok:
+                return
             print(f"[alerts] Telegram send failed: {response.status_code} {response.text}")
-    except Exception as e:
-        print(f"[alerts] Telegram send error: {e}")
+            return
+        except requests.exceptions.RequestException as e:
+            if attempt < attempts:
+                print(f"[alerts] Telegram send error (attempt {attempt}/{attempts}), retrying: {e}")
+                time.sleep(1)
+            else:
+                print(f"[alerts] Telegram send error, giving up after {attempts} attempts: {e}")
 
 
 def send_telegram_alert(frame, caption: str = "Anomaly detected"):

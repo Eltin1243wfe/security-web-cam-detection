@@ -5,50 +5,99 @@ about — nothing here sends a notification yet, that's stage 4. For now
 it just prints to the console when something crosses the line into
 "anomaly", so I can watch the logic work before wiring up real alerts.
 
-Two problems this solves, both found during actual testing rather than
+Problems this solves, all found during actual testing rather than
 guessed upfront:
 1. A single frame saying "person" isn't trustworthy — a chair and a
    towel both triggered one-frame false positives during testing.
 2. Not every real person in frame is something I want to be alerted
    about (e.g. me getting water at night) — the system needs an
    armed/disarmed concept, same as any normal house alarm.
+3. "A person exists somewhere in frame" isn't the same as "the same
+   person has continuously been here" — if detection flickers between
+   two unrelated spots (e.g. a real person, then briefly a shadow
+   elsewhere), naively counting consecutive frames would treat that as
+   one continuous presence when it isn't. Stage 5 adds a spatial check
+   on top of the frame-count check for exactly this reason.
 """
 
 from datetime import datetime
+import math
 
 import config
+
+
+def _box_center(box):
+    x1, y1, x2, y2 = box
+    return ((x1 + x2) / 2, (y1 + y2) / 2)
+
+
+def _distance(point_a, point_b):
+    return math.hypot(point_a[0] - point_b[0], point_a[1] - point_b[1])
 
 
 class PresenceTracker:
     """
     Turns per-frame detections into a stable "someone is actually here"
-    signal by requiring several consecutive frames before trusting it.
+    signal by requiring several consecutive frames before trusting it —
+    and, as of stage 5, requiring those frames to be roughly the same
+    person in roughly the same spot, not just "a person somewhere."
 
     One tracker instance = one continuous stretch of presence. Any gap
-    (a frame with nobody detected) resets the count — so someone has to
-    be visible for the full threshold again before it counts as sustained.
-    That's deliberately strict for now; if it turns out real people keep
-    dropping a frame here and there and getting reset unfairly, the fix
-    is tolerance for brief gaps, not a lower threshold.
+    (no person detected) or any large jump in position resets the count
+    — so someone has to be visible, in a consistent spot, for the full
+    threshold again before it counts as sustained. Deliberately strict
+    for now; if real people keep tripping the drift check while just
+    moving normally, the fix is raising max_center_drift, not removing
+    the check.
     """
 
-    def __init__(self, consecutive_frames_required: int):
+    def __init__(self, consecutive_frames_required: int, max_center_drift: float = float("inf")):
         self.consecutive_frames_required = consecutive_frames_required
+        self.max_center_drift = max_center_drift
         self._consecutive_count = 0
         self._sustained = False
+        self._last_center = None
 
-    def update(self, person_detected: bool) -> bool:
+    @staticmethod
+    def _best_person_box(detections):
+        # If more than one person's in frame, track whichever detection
+        # YOLO is most confident about — good enough for a single
+        # continuous "is someone here" signal. Tracking every person
+        # independently is a real upgrade but a bigger one than this
+        # stage needs.
+        person_boxes = [d for d in detections if d["label"] == "person"]
+        if not person_boxes:
+            return None
+        return max(person_boxes, key=lambda d: d["confidence"])["box"]
+
+    def update(self, detections: list) -> bool:
         """
-        Call once per frame with whether a person was detected in it.
-        Returns True on exactly the frame where presence becomes
-        sustained (crosses the threshold) — not on every frame after,
-        so callers can treat True as "a new event just started."
+        Call once per frame with that frame's detections (already
+        filtered by class/confidence/size upstream). Returns True on
+        exactly the frame where presence becomes sustained — not on
+        every frame after — so callers can treat True as "a new event
+        just started."
         """
-        if not person_detected:
+        person_box = self._best_person_box(detections)
+
+        if person_box is None:
             self._consecutive_count = 0
             self._sustained = False
+            self._last_center = None
             return False
 
+        current_center = _box_center(person_box)
+
+        if self._last_center is not None:
+            drift = _distance(self._last_center, current_center)
+            if drift > self.max_center_drift:
+                # Jumped too far to plausibly be the same continuous
+                # presence — treat this as a fresh start, not a
+                # continuation of what came before.
+                self._consecutive_count = 0
+                self._sustained = False
+
+        self._last_center = current_center
         self._consecutive_count += 1
 
         if self._consecutive_count >= self.consecutive_frames_required and not self._sustained:
@@ -57,29 +106,6 @@ class PresenceTracker:
 
         return False
 
-
-def is_armed(now: datetime | None = None) -> bool:
-    """
-    Whether the system should currently treat sustained presence as an
-    anomaly worth alerting on. SYSTEM_ARMED is the manual override — if
-    that's off, nothing else matters. If it's on and USE_TIME_WINDOW is
-    set, arming is further restricted to ARMED_START_HOUR-ARMED_END_HOUR
-    (e.g. midnight-6am, when nobody should reasonably be up).
-    """
-    if not config.SYSTEM_ARMED:
-        return False
-
-    if not config.USE_TIME_WINDOW:
-        return True
-
-    now = now or datetime.now()
-    start, end = config.ARMED_START_HOUR, config.ARMED_END_HOUR
-
-    # Same comparison either way, just depends whether the window wraps
-    # past midnight (e.g. 22 -> 6) or not (e.g. 1 -> 5).
-    if start < end:
-        return start <= now.hour < end
-    return now.hour >= start or now.hour < end
 
 class CooldownGate:
     """
@@ -112,3 +138,25 @@ class CooldownGate:
 
         self._last_fired_at = now
         return True
+
+
+def is_armed(now: datetime | None = None) -> bool:
+    """
+    Whether the system should currently treat sustained presence as an
+    anomaly worth alerting on. SYSTEM_ARMED is the manual override — if
+    that's off, nothing else matters. If it's on and USE_TIME_WINDOW is
+    set, arming is further restricted to ARMED_START_HOUR-ARMED_END_HOUR
+    (e.g. midnight-6am, when nobody should reasonably be up).
+    """
+    if not config.SYSTEM_ARMED:
+        return False
+
+    if not config.USE_TIME_WINDOW:
+        return True
+
+    now = now or datetime.now()
+    start, end = config.ARMED_START_HOUR, config.ARMED_END_HOUR
+
+    if start < end:
+        return start <= now.hour < end
+    return now.hour >= start or now.hour < end

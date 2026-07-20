@@ -55,8 +55,12 @@ def main():
         model_name=config.MODEL_NAME,
         confidence_threshold=config.CONFIDENCE_THRESHOLD,
         classes_of_interest=config.CLASSES_OF_INTEREST,
+        min_box_height=config.MIN_PERSON_BOX_HEIGHT,
     )
-    presence_tracker = PresenceTracker(config.CONSECUTIVE_FRAMES_THRESHOLD) 
+    presence_tracker = PresenceTracker(
+        config.CONSECUTIVE_FRAMES_THRESHOLD,
+        max_center_drift=config.MAX_CENTER_DRIFT_PX,
+    )
     cooldown_gate = CooldownGate(config.ANOMALY_COOLDOWN_SECONDS)
 
 
@@ -73,12 +77,12 @@ def main():
                                         int(frame.shape[0] * config.FRAME_WIDTH / frame.shape[1])))
 
             detections = detector.detect(frame)
-            person_detected = any(d["label"] == "person" for d in detections)
-
+            
             # Only fires True on the frame where presence crosses the
-            # consecutive-frame threshold — this is what filters out the
-            # chair/towel-style single-frame flicker from becoming an event.
-            event_started = presence_tracker.update(person_detected)
+            # consecutive-frame threshold AND stays spatially consistent
+            # — this is what filters out both single-frame flicker and
+            # detections that jump between unrelated spots in frame.
+            event_started = presence_tracker.update(detections)
             armed = is_armed()
 
             if event_started and armed:

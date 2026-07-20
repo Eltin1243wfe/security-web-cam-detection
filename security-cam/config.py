@@ -69,6 +69,20 @@ CONSECUTIVE_FRAMES_THRESHOLD = 15
 # actually alert about it.
 ANOMALY_COOLDOWN_SECONDS = 30
 
+# --- Stage 5: false-positive hardening -----------------------------------
+
+# Detections with a bounding box shorter than this (in pixels, at
+# FRAME_WIDTH resolution) get thrown out entirely — almost always noise
+# rather than an actual person worth caring about.
+MIN_PERSON_BOX_HEIGHT = 40
+
+# Max allowed jump (pixels) in a detection's center point between
+# consecutive frames before it's treated as a break in continuity rather
+# than the same presence continuing. At FRAME_WIDTH=800, 150px is a
+# generous chunk of the frame — real people don't teleport across it in
+# 1/15th of a second, but this still allows normal walking-speed motion.
+MAX_CENTER_DRIFT_PX = 150
+
 # --- Stage 4: alerting ---------------------------------------------------
 
 # Path to the sound played when an anomaly actually fires (i.e. survives
